@@ -45,6 +45,7 @@ func appPath() string {
 
 	switch runtime.GOOS {
 	case "linux":
+		// 可惜了，arm过不了验证
 		if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 			app += "linux/helper-arm64"
 		} else {
