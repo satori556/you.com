@@ -7,11 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/bincooo/you.com/common"
+	"github.com/bincooo/emit.io"
+	"github.com/gingfrederik/docx"
+	_ "github.com/gingfrederik/docx"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strconv"
 	"strings"
@@ -19,46 +23,79 @@ import (
 )
 
 type Message struct {
-	Role    string
-	Content string
+	Answer   string `json:"answer"`
+	Question string `json:"question"`
 }
 
 type Chat struct {
-	cookie      string
-	model       string
-	proxies     string
-	limitsWithE bool
+	cookie     string
+	clearance  string
+	model      string
+	proxies    string
+	limitWithE bool
+
+	session   *emit.Session
+	userAgent string
 }
 
 const (
-	GPT_4                    = "gpt_4"
-	GPT_4_TURBO              = "gpt_4_turbo"
-	CLAUDE_2                 = "claude_2"
-	CLAUDE_3_OPUS            = "claude_3_opus"
-	CLAUDE_3_SONNET          = "claude_3_sonnet"
-	CLAUDE_3_HAIKU           = "claude_3_haiku"
-	GEMINI_PRO               = "gemini_pro"
-	GEMINI_1_5_PRO           = "gemini_1_5_pro"
-	DATABRICKS_DBRX_INSTRUCT = "databricks_dbrx_instruct"
-	COMMAND_R                = "command_r"
-	COMMAND_R_PLUS           = "command_r_plus"
-	LLAMA3                   = "llama3"
-	ZEPHYR                   = "zephyr"
+	GPT_4       = "gpt_4"
+	GPT_4o      = "gpt_4o"
+	GPT_4_TURBO = "gpt_4_turbo"
+
+	CLAUDE_2          = "claude_2"
+	CLAUDE_3_HAIKU    = "claude_3_haiku"
+	CLAUDE_3_SONNET   = "claude_3_sonnet"
+	CLAUDE_3_5_SONNET = "claude_3_5_sonnet"
+	CLAUDE_3_OPUS     = "claude_3_opus"
 )
 
 func New(cookie, model, proxies string) Chat {
-	cookie = extCookies(cookie, model)
-	return Chat{cookie, model, proxies, false}
+	userAgent := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"
+	return Chat{cookie, "", model, proxies, false, nil, userAgent}
 }
 
-func (c *Chat) Reply(ctx context.Context, previousMessages, query string) (chan string, error) {
-	if c.limitsWithE {
-		response, err := common.ClientBuilder().
+func (c *Chat) Client(session *emit.Session) {
+	c.session = session
+}
+
+func (c *Chat) CloudFlare(cookie, userAgent string) {
+	c.clearance = cookie
+	c.userAgent = userAgent
+}
+
+func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query string, isf bool) (chan string, error) {
+	if c.clearance == "" && cmdPort != "" {
+		response, err := emit.ClientBuilder(c.session).
+			Context(ctx).
+			GET("http://127.0.0.1:" + cmdPort + "/clearance").
+			DoS(http.StatusOK)
+		if err != nil {
+			return nil, err
+		}
+
+		obj, err := emit.ToMap(response)
+		if err != nil {
+			return nil, err
+		}
+
+		data := obj["data"].(map[string]interface{})
+		c.clearance = data["cookie"].(string)
+		c.userAgent = data["userAgent"].(string)
+	}
+
+	jar := extCookies(emit.MergeCookies(c.cookie, c.clearance), c.model)
+	if c.limitWithE {
+		response, err := emit.ClientBuilder(c.session).
 			Context(ctx).
 			Proxies(c.proxies).
 			GET("https://you.com/api/user/getYouProState").
-			Header("Cookie", c.cookie).
-			DoWith(http.StatusOK)
+			Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
+			Header("User-Agent", c.userAgent).
+			Header("Accept-Language", "en-US,en;q=0.9").
+			Header("Referer", "https://you.com/").
+			Header("Origin", "https://you.com").
+			DoS(http.StatusOK)
 		if err != nil {
 			return nil, err
 		}
@@ -69,65 +106,70 @@ func (c *Chat) Reply(ctx context.Context, previousMessages, query string) (chan 
 		}
 
 		var s state
-		if err = common.ToObject(response, &s); err != nil {
+		if err = emit.ToObject(response, &s); err != nil {
 			return nil, err
 		}
 
+		logrus.Infof("used: %d/%d", s.Freemium["used_calls"], s.Freemium["max_calls"])
 		if s.Freemium["max_calls"] == s.Freemium["used_calls"] {
-			return nil, errors.New("zero quota")
+			return nil, errors.New("ZERO QUOTA")
 		}
 	}
 
-	var files []byte
-	if previousMessages != "" {
-		filename, err := upload(ctx, c.cookie, c.proxies, previousMessages)
-		if err != nil {
-			return nil, err
-		}
+	messages, err := mergeMessages(previousMessages, isf)
+	if err != nil {
+		return nil, err
+	}
 
-		file := map[string]string{
-			"user_filename": "paste.txt",
-			"filename":      filename,
-			"size":          strconv.Itoa(len(previousMessages)),
-		}
+	var (
+		userFiles = "_"
+		files     = ""
+		chatL     = strconv.Itoa(len(previousMessages))
+	)
 
-		files, err = json.Marshal([]interface{}{file})
-		if err != nil {
-			return nil, err
+	if isf {
+		filename, e := c.upload(ctx, c.proxies, jar, messages)
+		if e != nil {
+			return nil, e
 		}
+		userFiles = "userFiles"
+		files = fmt.Sprintf(`[{"user_filename":"messages.txt","filename":"%s","size":"%d"}]`, filename, len(messages))
+		chatL = "0"
 	}
 
 	chatId := uuid.NewString()
 	conversationTurnId := uuid.NewString()
-	response, err := common.ClientBuilder().
+	t := time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
+	response, err := emit.ClientBuilder(c.session).
 		GET("https://you.com/api/streamingSearch").
 		Context(ctx).
 		Proxies(c.proxies).
+		CookieJar(jar).
 		Query("q", url.QueryEscape(query)).
 		Query("page", "1").
 		Query("count", "10").
-		Query("incognito", "true").
-		Query("safeSearch", "off").
-		Query("mkt", "zh-CN").
-		Query("responseFilter", "TimeZone,Computation,RelatedSearches").
+		Query("safeSearch", "Off").
+		Query("mkt", "zh-HK").
 		Query("domain", "youchat").
-		Query("use_personalization_extraction", "true").
-		Query("chatId", chatId).
+		Query("use_personalization_extraction", "false").
 		Query("queryTraceId", chatId).
+		Query("chatId", chatId).
 		Query("conversationTurnId", conversationTurnId).
-		Query("pastChatLength", "0").
 		Query("selectedChatMode", "custom").
-		Query("userFiles", string(files)).
-		Query("selectedAIModel", c.model).
-		Query("traceId", fmt.Sprintf("%s|%s|%s", chatId, conversationTurnId, time.Now().Format(time.RFC3339)+"Z")).
-		Query("chat", "[]").
-		Header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0").
+		Query(userFiles, url.QueryEscape(files)).
+		Query("selectedAiModel", c.model).
+		Query("traceId", fmt.Sprintf("%s|%s|%s", chatId, conversationTurnId, t)).
+		Query("incognito", "true").
+		//Query("responseFilter", "WebPages,TimeZone,Computation,RelatedSearches").
+		Query("pastChatLength", chatL).
+		Query("chat", url.QueryEscape(messages)).
+		Header("User-Agent", c.userAgent).
+		Header("Host", "you.com").
 		Header("Origin", "https://you.com").
-		Header("Referer", "https://you.com/search").
+		Header("Referer", "https://you.com/search?fromSearchBar=true&tbm=youchat&chatMode=custom").
+		Header("Accept-Language", "en-US,en;q=0.9").
 		Header("Accept", "text/event-stream").
-		Header("Priority", "u=1, i").
-		Header("Cookie", fmt.Sprintf("ai_model=%s; %s", c.model, c.cookie)).
-		DoWith(http.StatusOK)
+		DoS(http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
@@ -138,56 +180,96 @@ func (c *Chat) Reply(ctx context.Context, previousMessages, query string) (chan 
 }
 
 // 额度用完是否返回错误
-func (c *Chat) LimitsWithE(limitsWithE bool) {
-	c.limitsWithE = limitsWithE
+func (c *Chat) LimitWithE(limitWithE bool) {
+	c.limitWithE = limitWithE
 }
 
 // 附件上传
-func upload(ctx context.Context, cookie, proxies, content string) (string, error) {
-	response, err := common.ClientBuilder().
+func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, content string) (string, error) {
+	response, err := emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(proxies).
 		GET("https://you.com/api/get_nonce").
-		Header("Cookie", cookie).
-		DoWith(http.StatusOK)
+		CookieJar(jar).
+		Header("Accept", "application/json, text/plain, */*").
+		Header("Accept-Language", "en-US,en;q=0.9").
+		Header("Referer", "https://you.com/?chatMode=custom").
+		Header("Origin", "https://you.com").
+		Header("User-Agent", c.userAgent).
+		DoS(http.StatusOK)
 	if err != nil {
 		return "", err
 	}
 
-	bio, err := io.ReadAll(response.Body)
+	uploadNonce := emit.TextResponse(response)
+
+	doc := docx.NewFile()
+	para := doc.AddParagraph()
+	para.AddText(content)
+
+	var buffer bytes.Buffer
+
+	//h := make(textproto.MIMEHeader)
+	//h.Set("Content-Disposition", `form-data; name="file"; filename="messages.docx"`)
+	//h.Set("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+	//h.Set("Content-Type", "text/plain")
+	//fw, _ := w.CreatePart(h)
+	//err = doc.Write(fw)
+	//if err != nil {
+	//	return "", err
+	//}
+
+	w := multipart.NewWriter(&buffer)
+	fw, _ := w.CreateFormFile("file", "messages.txt")
+	_, err = io.Copy(fw, strings.NewReader(content))
 	if err != nil {
 		return "", err
 	}
+	_ = w.Close()
 
-	var b bytes.Buffer
-	w := multipart.NewWriter(&b)
-	file, _ := w.CreateFormFile("file", "paste.txt")
-	file.Write([]byte(content))
-	w.Close()
-
-	response, err = common.ClientBuilder().
+	response, err = emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(proxies).
+		CookieJar(jar).
 		POST("https://you.com/api/upload").
-		Header("Cookie", cookie).
-		Header("X-Upload-Nonce", string(bio)).
+		Header("X-Upload-Nonce", uploadNonce).
 		Header("Content-Type", w.FormDataContentType()).
-		Header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0").
 		Header("Origin", "https://you.com").
-		Header("Referer", "https://you.com/search").
-		Header("Priority", "u=1, i").
-		SetBytes(b.Bytes()).
-		DoWith(http.StatusOK)
+		Header("Accept-Language", "en-US,en;q=0.9").
+		Header("Host", "you.com").
+		Header("Accept-Encoding", "br").
+		Header("Referer", "https://you.com/?chatMode=custom").
+		Header("Origin", "https://you.com").
+		Header("Accept", "multipart/form-data").
+		Header("User-Agent", c.userAgent).
+		Buffer(&buffer).
+		DoS(http.StatusOK)
 	if err != nil {
 		return "", err
 	}
 
 	var obj map[string]string
-	if err = common.ToObject(response, &obj); err != nil {
+	if err = emit.ToObject(response, &obj); err != nil {
 		return "", err
 	}
 
 	if filename, ok := obj["filename"]; ok {
+		response, err = emit.ClientBuilder(c.session).
+			Context(ctx).
+			Proxies(proxies).
+			CookieJar(jar).
+			POST("https://you.com/api/instrumentation").
+			JHeader().
+			Header("Origin", "https://you.com").
+			Header("Accept-Language", "en-US,en;q=0.9").
+			Header("Host", "you.com").
+			Header("Accept-Encoding", "br").
+			Header("Referer", "https://you.com/?chatMode=custom").
+			Header("Origin", "https://you.com").
+			Header("Accept", "application/json, text/plain, */*").
+			Header("User-Agent", c.userAgent).
+			Bytes([]byte(`{"metricName":"file_upload_client_info_file_drop","documentVisibilityState":"visible","metricType":"info","value":1}`)).
+			DoS(http.StatusOK)
 		return filename, nil
 	}
 
@@ -227,6 +309,9 @@ func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Respo
 			return true
 		}
 
+		logrus.Trace("--------- ORIGINAL MESSAGE ---------")
+		logrus.Trace(data)
+
 		if len(data) < 7 || data[:7] != "event: " {
 			return true
 		}
@@ -245,6 +330,7 @@ func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Respo
 			return true
 		}
 		data = data[6:]
+		logrus.Trace(data)
 		if event == "youChatModeLimits" {
 			ch <- "limits: " + data
 			return true
@@ -259,7 +345,7 @@ func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Respo
 			return true
 		}
 
-		if freeQuota(token.YouChatToken) {
+		if quotaEmpty(token.YouChatToken) {
 			return true
 		}
 
@@ -280,33 +366,40 @@ func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Respo
 	}
 }
 
-func MergeMessages(messages []Message) string {
+func mergeMessages(messages []Message, files bool) (string, error) {
 	if len(messages) == 0 {
-		return ""
+		return "[]", nil
 	}
 
-	buffer := new(bytes.Buffer)
-	lastRole := ""
-
-	for _, message := range messages {
-		if lastRole == "" || lastRole != message.Role {
-			lastRole = message.Role
-			buffer.WriteString(fmt.Sprintf("\n%s: %s", message.Role, message.Content))
-			continue
+	if files {
+		var buffer bytes.Buffer
+		messageL := len(messages)
+		for pos, message := range messages {
+			buffer.WriteString(fmt.Sprintf("%s\n\n%s", message.Question, message.Answer))
+			if pos < messageL-1 {
+				buffer.WriteString("\n\n")
+			}
 		}
-		buffer.WriteString(fmt.Sprintf("\n%s", message.Content))
+		return buffer.String(), nil
 	}
 
-	return buffer.String()
+	messageBytes, err := json.Marshal(messages)
+	if err != nil {
+		return "", err
+	}
+
+	return string(messageBytes), nil
 }
 
-func freeQuota(value string) bool {
+func quotaEmpty(value string) bool {
 	return strings.HasPrefix(value, "#### Please log in to access GPT-4 mode.") ||
 		strings.HasPrefix(value, "#### You've hit your free quota for GPT-4 mode.")
 }
 
-func extCookies(cookies, model string) string {
-	var result []string
+func extCookies(cookies, model string) (jar http.CookieJar) {
+	jar, _ = cookiejar.New(nil)
+	u, _ := url.Parse("https://you.com")
+
 	slice := strings.Split(cookies, "; ")
 	for _, cookie := range slice {
 		kv := strings.Split(cookie, "=")
@@ -318,16 +411,24 @@ func extCookies(cookies, model string) string {
 		v := strings.Join(kv[1:], "=")
 
 		if strings.HasPrefix(k, "safesearch") {
+			jar.SetCookies(u, []*http.Cookie{{Name: k, Value: "Off"}})
+			continue
+		}
+
+		if k == "you_subscription" {
+			jar.SetCookies(u, []*http.Cookie{{Name: k, Value: "freemium"}})
 			continue
 		}
 
 		if k == "ai_model" {
-			result = append(result, k+"="+model)
+			jar.SetCookies(u, []*http.Cookie{{Name: k, Value: model}})
 			continue
 		}
 
-		result = append(result, k+"="+strings.TrimSpace(v))
+		jar.SetCookies(u, []*http.Cookie{{Name: k, Value: strings.TrimSpace(v)}})
 	}
 
-	return strings.Join(result, "; ")
+	//
+	jar.SetCookies(u, []*http.Cookie{{Name: "has_seen_agent_uploads_modal", Value: "true"}})
+	return
 }
