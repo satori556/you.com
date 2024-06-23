@@ -2,6 +2,7 @@ package you
 
 import (
 	"github.com/sirupsen/logrus"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
@@ -11,7 +12,7 @@ import (
 var cmd *exec.Cmd
 var cmdPort = ""
 
-func Exec(port string) {
+func Exec(port string, stdout io.Writer, stderr io.Writer) {
 	cmdPort = port
 	app := appPath()
 
@@ -21,6 +22,13 @@ func Exec(port string) {
 	}
 
 	cmd = exec.Command(app, "--port", port)
+	if stdout == nil {
+		cmd.Stdout = os.Stdout
+	}
+	if stderr == nil {
+		cmd.Stderr = os.Stderr
+	}
+
 	go func() {
 		if err := cmd.Run(); err != nil {
 			logrus.Fatalf("executable file error: %v", err)
