@@ -12,6 +12,7 @@ import (
 var cmd *exec.Cmd
 var cmdPort = ""
 
+// tips: arm64 平台 特征过于明显，无法过盾
 func Exec(port string, stdout io.Writer, stderr io.Writer) {
 	cmdPort = port
 	app := appPath()

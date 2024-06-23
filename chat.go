@@ -86,32 +86,11 @@ func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query stri
 
 	jar := extCookies(emit.MergeCookies(c.cookie, c.clearance), c.model)
 	if c.limitWithE {
-		response, err := emit.ClientBuilder(c.session).
-			Context(ctx).
-			Proxies(c.proxies).
-			GET("https://you.com/api/user/getYouProState").
-			Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
-			Header("User-Agent", c.userAgent).
-			Header("Accept-Language", "en-US,en;q=0.9").
-			Header("Referer", "https://you.com/").
-			Header("Origin", "https://you.com").
-			DoS(http.StatusOK)
+		count, err := c.State(ctx)
 		if err != nil {
 			return nil, err
 		}
-
-		type state struct {
-			Freemium      map[string]int
-			Subscriptions []interface{}
-		}
-
-		var s state
-		if err = emit.ToObject(response, &s); err != nil {
-			return nil, err
-		}
-
-		logrus.Infof("used: %d/%d", s.Freemium["used_calls"], s.Freemium["max_calls"])
-		if s.Freemium["max_calls"] == s.Freemium["used_calls"] {
+		if count <= 0 {
 			return nil, errors.New("ZERO QUOTA")
 		}
 	}
@@ -177,6 +156,39 @@ func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query stri
 	ch := make(chan string)
 	go c.resolve(ctx, ch, response)
 	return ch, nil
+}
+
+func (c *Chat) State(ctx context.Context) (int, error) {
+	response, err := emit.ClientBuilder(c.session).
+		Context(ctx).
+		Proxies(c.proxies).
+		GET("https://you.com/api/user/getYouProState").
+		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
+		Header("User-Agent", c.userAgent).
+		Header("Accept-Language", "en-US,en;q=0.9").
+		Header("Referer", "https://you.com/").
+		Header("Origin", "https://you.com").
+		DoS(http.StatusOK)
+	if err != nil {
+		return -1, err
+	}
+
+	type state struct {
+		Freemium      map[string]int
+		Subscriptions []interface{}
+	}
+
+	var s state
+	if err = emit.ToObject(response, &s); err != nil {
+		return -1, err
+	}
+
+	logrus.Infof("used: %d/%d", s.Freemium["used_calls"], s.Freemium["max_calls"])
+	if s.Freemium["max_calls"] == s.Freemium["used_calls"] {
+		return 0, nil
+	}
+
+	return s.Freemium["max_calls"] - s.Freemium["used_calls"], nil
 }
 
 // 额度用完是否返回错误
