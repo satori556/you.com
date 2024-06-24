@@ -13,7 +13,7 @@ var cmd *exec.Cmd
 var cmdPort = ""
 
 // tips: arm64 平台 特征过于明显，无法过盾
-func Exec(port string, stdout io.Writer, stderr io.Writer) {
+func Exec(port, proxies string, stdout io.Writer, stderr io.Writer) {
 	cmdPort = port
 	app := appPath()
 
@@ -22,7 +22,12 @@ func Exec(port string, stdout io.Writer, stderr io.Writer) {
 		return
 	}
 
-	cmd = exec.Command(app, "--port", port)
+	args := []string{app, "--port", port}
+	if proxies != "" {
+		args = append(args, "--proxies", proxies)
+	}
+
+	cmd = exec.Command(app, args...)
 	if stdout == nil {
 		cmd.Stdout = os.Stdout
 	}
