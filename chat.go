@@ -113,6 +113,7 @@ func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query stri
 		}
 		userFiles = "userFiles"
 		files = fmt.Sprintf(`[{"user_filename":"messages.txt","filename":"%s","size":"%d"}]`, filename, len(messages))
+		messages = "[]"
 		chatL = "0"
 	}
 
