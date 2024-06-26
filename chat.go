@@ -36,6 +36,7 @@ type Chat struct {
 
 	session   *emit.Session
 	userAgent string
+	lang      string
 }
 
 const (
@@ -51,17 +52,21 @@ const (
 )
 
 func New(cookie, model, proxies string) Chat {
+	lang := "en-US,en;q=0.9"
 	userAgent := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"
-	return Chat{cookie, "", model, proxies, false, nil, userAgent}
+	return Chat{cookie, "", model, proxies, false, nil, userAgent, lang}
 }
 
 func (c *Chat) Client(session *emit.Session) {
 	c.session = session
 }
 
-func (c *Chat) CloudFlare(cookie, userAgent string) {
+func (c *Chat) CloudFlare(cookie, userAgent, lang string) {
 	c.clearance = cookie
 	c.userAgent = userAgent
+	if lang != "" {
+		c.lang = lang
+	}
 }
 
 func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query string, isf bool) (chan string, error) {
@@ -147,7 +152,7 @@ func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query stri
 		Header("Host", "you.com").
 		Header("Origin", "https://you.com").
 		Header("Referer", "https://you.com/search?fromSearchBar=true&tbm=youchat&chatMode=custom").
-		Header("Accept-Language", "en-US,en;q=0.9").
+		Header("Accept-Language", c.lang).
 		Header("Accept", "text/event-stream").
 		DoS(http.StatusOK)
 	if err != nil {
@@ -166,7 +171,7 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 		GET("https://you.com/api/user/getYouProState").
 		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("User-Agent", c.userAgent).
-		Header("Accept-Language", "en-US,en;q=0.9").
+		Header("Accept-Language", c.lang).
 		Header("Referer", "https://you.com/").
 		Header("Origin", "https://you.com").
 		DoS(http.StatusOK)
@@ -205,7 +210,7 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 		GET("https://you.com/api/get_nonce").
 		CookieJar(jar).
 		Header("Accept", "application/json, text/plain, */*").
-		Header("Accept-Language", "en-US,en;q=0.9").
+		Header("Accept-Language", c.lang).
 		Header("Referer", "https://you.com/?chatMode=custom").
 		Header("Origin", "https://you.com").
 		Header("User-Agent", c.userAgent).
@@ -248,7 +253,7 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 		Header("X-Upload-Nonce", uploadNonce).
 		Header("Content-Type", w.FormDataContentType()).
 		Header("Origin", "https://you.com").
-		Header("Accept-Language", "en-US,en;q=0.9").
+		Header("Accept-Language", c.lang).
 		Header("Host", "you.com").
 		Header("Accept-Encoding", "br").
 		Header("Referer", "https://you.com/?chatMode=custom").
@@ -274,7 +279,7 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 			POST("https://you.com/api/instrumentation").
 			JHeader().
 			Header("Origin", "https://you.com").
-			Header("Accept-Language", "en-US,en;q=0.9").
+			Header("Accept-Language", c.lang).
 			Header("Host", "you.com").
 			Header("Accept-Encoding", "br").
 			Header("Referer", "https://you.com/?chatMode=custom").
@@ -318,12 +323,11 @@ func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Respo
 
 		var event string
 		data := scanner.Text()
+		logrus.Trace("--------- ORIGINAL MESSAGE ---------")
+		logrus.Trace(data)
 		if data == "" {
 			return true
 		}
-
-		logrus.Trace("--------- ORIGINAL MESSAGE ---------")
-		logrus.Trace(data)
 
 		if len(data) < 7 || data[:7] != "event: " {
 			return true
@@ -339,6 +343,8 @@ func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Respo
 		}
 
 		data = scanner.Text()
+		logrus.Trace("--------- ORIGINAL MESSAGE ---------")
+		logrus.Trace(data)
 		if len(data) < 6 || data[:6] != "data: " {
 			return true
 		}
