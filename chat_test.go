@@ -23,7 +23,7 @@ func TestChat(t *testing.T) {
 	chat := New(cookie, model, "http://127.0.0.1:7890")
 	chat.LimitWithE(true)
 
-	Exec("8081")
+	Exec("8081", "http://127.0.0.1:7890", os.Stdout, os.Stdout)
 	defer Exit()
 
 	messages := []Message{
@@ -116,7 +116,7 @@ func TestChat(t *testing.T) {
 	}
 
 	chat.Client(session)
-	chat.CloudFlare(clearance, userAgent)
+	chat.CloudFlare(clearance, userAgent, "")
 	ch, err := chat.Reply(context.Background(), messages, query, true)
 	if err != nil {
 		t.Fatal(err)
