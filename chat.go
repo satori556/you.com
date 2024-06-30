@@ -100,7 +100,7 @@ func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query stri
 		}
 	}
 
-	messages, err := mergeMessages(previousMessages, isf)
+	messages, err := MergeMessages(previousMessages, isf)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +385,7 @@ func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Respo
 	}
 }
 
-func mergeMessages(messages []Message, files bool) (string, error) {
+func MergeMessages(messages []Message, files bool) (string, error) {
 	if len(messages) == 0 {
 		return "[]", nil
 	}
