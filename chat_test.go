@@ -117,6 +117,11 @@ func TestChat(t *testing.T) {
 
 	chat.Client(session)
 	chat.CloudFlare(clearance, userAgent, "")
+	err = chat.Custom(context.Background(), "you/"+model, "xxx")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	ch, err := chat.Reply(context.Background(), messages, "[]", query)
 	if err != nil {
 		t.Fatal(err)

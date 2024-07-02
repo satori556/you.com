@@ -194,6 +194,86 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 	return s.Freemium["max_calls"] - s.Freemium["used_calls"], nil
 }
 
+// 创建一个自定义模型，已存在则删除后创建
+func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error) {
+	response, err := emit.ClientBuilder(c.session).
+		Context(ctx).
+		Proxies(c.proxies).
+		GET("https://you.com/api/user_chat_modes").
+		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
+		Header("User-Agent", c.userAgent).
+		Header("Accept-Language", c.lang).
+		Header("Referer", "https://you.com/").
+		Header("Origin", "https://you.com").
+		DoC(emit.Status(http.StatusOK), emit.IsJSON)
+	if err != nil {
+		return err
+	}
+
+	obj, err := emit.ToMap(response)
+	if err != nil {
+		return err
+	}
+
+	modelId := ""
+	models, ok := obj["user_chat_modes"].([]interface{})
+	if ok {
+		for _, model := range models {
+			if info, o := model.(map[string]interface{}); o {
+				if info["chat_mode_name"] == modelName {
+					modelId = info["chat_mode_id"].(string)
+					break
+				}
+			}
+		}
+	}
+
+	if modelId != "" { // 删除自定义模型
+		logrus.Infof("delete model: %s", modelName)
+		response, err = emit.ClientBuilder(c.session).
+			Context(ctx).
+			Proxies(c.proxies).
+			DELETE("https://you.com/api/user_chat_modes").
+			Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
+			Header("User-Agent", c.userAgent).
+			Header("Accept-Language", c.lang).
+			Header("Referer", "https://you.com/").
+			Header("Origin", "https://you.com").
+			JHeader().
+			Body(map[string]interface{}{
+				"chatModeId": modelId,
+			}).
+			DoC(emit.Status(http.StatusOK), emit.IsJSON)
+		if err != nil {
+			return err
+		}
+		logrus.Info(emit.TextResponse(response))
+	}
+
+	_, err = emit.ClientBuilder(c.session).
+		Context(ctx).
+		Proxies(c.proxies).
+		POST("https://you.com/api/user_chat_modes").
+		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
+		Header("User-Agent", c.userAgent).
+		Header("Accept-Language", c.lang).
+		Header("Referer", "https://you.com/").
+		Header("Origin", "https://you.com").
+		JHeader().
+		Body(map[string]interface{}{
+			"aiModel":            c.model,
+			"chatModeName":       modelName,
+			"instructions":       system,
+			"hasLiveWebAccess":   false,
+			"hasPersonalization": false,
+		}).
+		DoC(emit.Status(http.StatusOK), emit.IsJSON)
+	if err == nil {
+		c.model = modelName
+	}
+	return
+}
+
 // 额度用完是否返回错误
 func (c *Chat) LimitWithE(limitWithE bool) {
 	c.limitWithE = limitWithE
