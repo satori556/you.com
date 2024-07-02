@@ -14,7 +14,7 @@ import (
 var (
 	cookie    = "xxx"
 	model     = CLAUDE_3_OPUS
-	clearance = ""
+	clearance = "_cfuvid=d8aZbZPR5LJa1eugIlVTCt7xtXrBPpYZn9u4OAZ30VY-1719909075836-0.0.1.1-604800000; __cf_bm=hrGvt4rSqiOhkXPxWAQwXiuifHhL9l4SYfuAgPT5ZxY-1719909075-1.0.1.1-hGuLZVwjMHAlEPE2ZQ_mIxxiQqu21FJM257gb1cg78eYpyHgW9nKbjvjx.z71wIV_SQlp3n1P.QidKazgLXgCbzWABOz8w_7zVoLVD7V5s4; "
 	userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"
 )
 
@@ -117,7 +117,7 @@ func TestChat(t *testing.T) {
 
 	chat.Client(session)
 	chat.CloudFlare(clearance, userAgent, "")
-	ch, err := chat.Reply(context.Background(), messages, query, true)
+	ch, err := chat.Reply(context.Background(), messages, "[]", query)
 	if err != nil {
 		t.Fatal(err)
 	}

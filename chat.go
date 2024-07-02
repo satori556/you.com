@@ -69,7 +69,7 @@ func (c *Chat) CloudFlare(cookie, userAgent, lang string) {
 	}
 }
 
-func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query string, isf bool) (chan string, error) {
+func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query string) (chan string, error) {
 	if c.clearance == "" && cmdPort != "" {
 		response, err := emit.ClientBuilder(c.session).
 			Context(ctx).
@@ -100,7 +100,7 @@ func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query stri
 		}
 	}
 
-	messages, err := MergeMessages(previousMessages, isf)
+	messages, err := MergeMessages(chats, false)
 	if err != nil {
 		return nil, err
 	}
@@ -108,18 +108,15 @@ func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query stri
 	var (
 		userFiles = "_"
 		files     = ""
-		chatL     = strconv.Itoa(len(previousMessages))
 	)
 
-	if isf {
-		filename, e := c.upload(ctx, c.proxies, jar, messages)
+	if size := len(fileMessages); size > 2 {
+		filename, e := c.upload(ctx, c.proxies, jar, fileMessages)
 		if e != nil {
 			return nil, e
 		}
 		userFiles = "userFiles"
-		files = fmt.Sprintf(`[{"user_filename":"messages.txt","filename":"%s","size":"%d"}]`, filename, len(messages))
-		messages = "[]"
-		chatL = "0"
+		files = fmt.Sprintf(`[{"user_filename":"messages.txt","filename":"%s","size":"%d"}]`, filename, size)
 	}
 
 	chatId := uuid.NewString()
@@ -145,8 +142,8 @@ func (c *Chat) Reply(ctx context.Context, previousMessages []Message, query stri
 		Query("selectedAiModel", c.model).
 		Query("traceId", fmt.Sprintf("%s|%s|%s", chatId, conversationTurnId, t)).
 		Query("incognito", "true").
-		//Query("responseFilter", "WebPages,TimeZone,Computation,RelatedSearches").
-		Query("pastChatLength", chatL).
+		Query("responseFilter", "WebPages,TimeZone,Computation,RelatedSearches").
+		Query("pastChatLength", strconv.Itoa(len(chats))).
 		Query("chat", url.QueryEscape(messages)).
 		Header("User-Agent", c.userAgent).
 		Header("Host", "you.com").
