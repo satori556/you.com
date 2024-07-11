@@ -186,11 +186,16 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 		return -1, err
 	}
 
-	logrus.Infof("used: %d/%d", s.Freemium["used_calls"], s.Freemium["max_calls"])
-	if s.Freemium["max_calls"] == s.Freemium["used_calls"] {
-		return 0, nil
+	if len(s.Subscriptions) > 0 {
+		iter := s.Subscriptions[0]
+		value := iter.(map[string]interface{})
+		if service, ok := value["service"]; ok && service.(string) == "youpro" {
+			logrus.Info("used: you pro") // 无限额度
+			return 200, nil
+		}
 	}
 
+	logrus.Infof("used: %d/%d", s.Freemium["used_calls"], s.Freemium["max_calls"])
 	return s.Freemium["max_calls"] - s.Freemium["used_calls"], nil
 }
 
