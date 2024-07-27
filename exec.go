@@ -48,15 +48,6 @@ func Exec(port, proxies string, stdout io.Writer, stderr io.Writer) {
 
 func appPath() string {
 	app := "bin/"
-
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		app += "-arm64"
-	}
-
-	if runtime.GOOS == "windows" {
-		app += ".exe"
-	}
-
 	switch runtime.GOOS {
 	case "linux":
 		// 可惜了，arm过不了验证
