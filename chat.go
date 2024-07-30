@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bincooo/emit.io"
-	"github.com/gingfrederik/docx"
 	_ "github.com/gingfrederik/docx"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -301,11 +300,11 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 		return "", err
 	}
 
-	uploadNonce := emit.TextResponse(response)
+	nonce := emit.TextResponse(response)
 
-	doc := docx.NewFile()
-	para := doc.AddParagraph()
-	para.AddText(content)
+	//doc := docx.NewFile()
+	//para := doc.AddParagraph()
+	//para.AddText(content)
 
 	var buffer bytes.Buffer
 
@@ -320,19 +319,19 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 	//}
 
 	w := multipart.NewWriter(&buffer)
+	defer w.Close()
 	fw, _ := w.CreateFormFile("file", "messages.txt")
 	_, err = io.Copy(fw, strings.NewReader(content))
 	if err != nil {
 		return "", err
 	}
-	_ = w.Close()
 
 	response, err = emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(proxies).
 		CookieJar(jar).
 		POST("https://you.com/api/upload").
-		Header("X-Upload-Nonce", uploadNonce).
+		Header("X-Upload-Nonce", nonce).
 		Header("Content-Type", w.FormDataContentType()).
 		Header("Origin", "https://you.com").
 		Header("Accept-Language", c.lang).
