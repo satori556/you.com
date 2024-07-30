@@ -319,12 +319,12 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 	//}
 
 	w := multipart.NewWriter(&buffer)
-	defer w.Close()
 	fw, _ := w.CreateFormFile("file", "messages.txt")
 	_, err = io.Copy(fw, strings.NewReader(content))
 	if err != nil {
 		return "", err
 	}
+	_ = w.Close()
 
 	response, err = emit.ClientBuilder(c.session).
 		Context(ctx).
