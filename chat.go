@@ -79,6 +79,7 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		}
 
 		obj, err := emit.ToMap(response)
+		_ = response.Body.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -175,6 +176,7 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 		return -1, err
 	}
 
+	defer response.Body.Close()
 	type state struct {
 		Freemium      map[string]int
 		Subscriptions []interface{}
@@ -214,6 +216,7 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error)
 		return err
 	}
 
+	defer response.Body.Close()
 	obj, err := emit.ToMap(response)
 	if err != nil {
 		return err
@@ -252,9 +255,10 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error)
 			return err
 		}
 		logrus.Info(emit.TextResponse(response))
+		_ = response.Body.Close()
 	}
 
-	_, err = emit.ClientBuilder(c.session).
+	response, err = emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(c.proxies).
 		POST("https://you.com/api/user_chat_modes").
@@ -275,6 +279,11 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error)
 	if err == nil {
 		c.model = modelName
 	}
+
+	if response != nil {
+		_ = response.Body.Close()
+	}
+
 	return
 }
 
@@ -301,6 +310,7 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 	}
 
 	nonce := emit.TextResponse(response)
+	_ = response.Body.Close()
 
 	//doc := docx.NewFile()
 	//para := doc.AddParagraph()
@@ -347,6 +357,7 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 		return "", err
 	}
 
+	defer response.Body.Close()
 	var obj map[string]string
 	if err = emit.ToObject(response, &obj); err != nil {
 		return "", err
@@ -369,6 +380,9 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 			Header("User-Agent", c.userAgent).
 			Bytes([]byte(`{"metricName":"file_upload_client_info_file_drop","documentVisibilityState":"visible","metricType":"info","value":1}`)).
 			DoS(http.StatusOK)
+		if response != nil {
+			_ = response.Body.Close()
+		}
 		return filename, nil
 	}
 
@@ -377,6 +391,7 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 
 func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Response) {
 	defer close(ch)
+	defer response.Body.Close()
 
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Split(func(data []byte, eof bool) (advance int, token []byte, err error) {
