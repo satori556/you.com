@@ -157,7 +157,7 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 	}
 
 	ch := make(chan string)
-	go c.resolve(ctx, ch, response)
+	go c.resolve(ctx, ch, response, chatId)
 	return ch, nil
 }
 
@@ -292,6 +292,28 @@ func (c *Chat) LimitWithE(limitWithE bool) {
 	c.limitWithE = limitWithE
 }
 
+func (c *Chat) delete(chatId string) {
+	response, err := emit.ClientBuilder(c.session).
+		Proxies(c.proxies).
+		DELETE("https://you.com/api/chat/deleteChat").
+		CookieJar(extCookies(c.cookie, c.model)).
+		Header("Accept", "application/json, text/plain, */*").
+		Header("Accept-Language", c.lang).
+		Header("Referer", "https://you.com/?chatMode=custom").
+		Header("Origin", "https://you.com").
+		Header("User-Agent", c.userAgent).
+		JHeader().
+		Body(map[string]interface{}{
+			"chatId": chatId,
+		}).DoC(emit.Status(http.StatusOK), emit.IsJSON)
+	if err != nil {
+		logrus.Error(err)
+		return
+	}
+	defer response.Body.Close()
+	logrus.Infof("deleted: %d", emit.TextResponse(response))
+}
+
 // 附件上传
 func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, content string) (string, error) {
 	response, err := emit.ClientBuilder(c.session).
@@ -389,9 +411,10 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 	return "", errors.New("upload failed")
 }
 
-func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Response) {
+func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Response, chatId string) {
 	defer close(ch)
 	defer response.Body.Close()
+	defer c.delete(chatId)
 
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Split(func(data []byte, eof bool) (advance int, token []byte, err error) {
