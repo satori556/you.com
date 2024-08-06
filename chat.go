@@ -296,7 +296,7 @@ func (c *Chat) delete(chatId string) {
 	response, err := emit.ClientBuilder(c.session).
 		Proxies(c.proxies).
 		DELETE("https://you.com/api/chat/deleteChat").
-		CookieJar(extCookies(c.cookie, c.model)).
+		CookieJar(extCookies(emit.MergeCookies(c.cookie, c.clearance), c.model)).
 		Header("Accept", "application/json, text/plain, */*").
 		Header("Accept-Language", c.lang).
 		Header("Referer", "https://you.com/?chatMode=custom").
