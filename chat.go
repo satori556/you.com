@@ -89,7 +89,6 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		c.userAgent = data["userAgent"].(string)
 	}
 
-	jar := extCookies(emit.MergeCookies(c.cookie, c.clearance), c.model)
 	if c.limitWithE {
 		count, err := c.State(ctx)
 		if err != nil {
@@ -111,7 +110,7 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 	)
 
 	if size := len(fileMessages); size > 2 {
-		filename, e := c.upload(ctx, c.proxies, jar, fileMessages)
+		filename, e := c.upload(ctx, c.proxies, fileMessages)
 		if e != nil {
 			return nil, e
 		}
@@ -126,7 +125,6 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		GET("https://you.com/api/streamingSearch").
 		Context(ctx).
 		Proxies(c.proxies).
-		CookieJar(jar).
 		Ja3("yes").
 		Query("q", url.QueryEscape(query)).
 		Query("page", "1").
@@ -146,6 +144,7 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		Query("responseFilter", "WebPages,TimeZone,Computation,RelatedSearches").
 		Query("pastChatLength", strconv.Itoa(len(chats))).
 		Query("chat", url.QueryEscape(messages)).
+		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("User-Agent", c.userAgent).
 		Header("Host", "you.com").
 		Header("Origin", "https://you.com").
@@ -321,13 +320,13 @@ func (c *Chat) delete(chatId string) {
 }
 
 // 附件上传
-func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, content string) (string, error) {
+func (c *Chat) upload(ctx context.Context, proxies string, content string) (string, error) {
 	response, err := emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(proxies).
 		Ja3("yes").
 		GET("https://you.com/api/get_nonce").
-		CookieJar(jar).
+		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("Accept", "application/json, text/plain, */*").
 		Header("Accept-Language", c.lang).
 		Header("Referer", "https://you.com/?chatMode=custom").
@@ -368,10 +367,10 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 	response, err = emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(proxies).
-		CookieJar(jar).
 		Ja3("yes").
 		POST("https://you.com/api/upload").
 		Header("X-Upload-Nonce", nonce).
+		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("Content-Type", w.FormDataContentType()).
 		Header("Origin", "https://you.com").
 		Header("Accept-Language", c.lang).
@@ -397,10 +396,10 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 		response, err = emit.ClientBuilder(c.session).
 			Context(ctx).
 			Proxies(proxies).
-			CookieJar(jar).
 			Ja3("yes").
 			POST("https://you.com/api/instrumentation").
 			JHeader().
+			Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 			Header("Origin", "https://you.com").
 			Header("Accept-Language", c.lang).
 			Header("Host", "you.com").
