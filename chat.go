@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"io"
+	"math/rand"
 	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
@@ -110,12 +111,13 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 	)
 
 	if size := len(fileMessages); size > 2 {
-		filename, e := c.upload(ctx, c.proxies, fileMessages)
+		uf := hex(12)
+		filename, e := c.upload(ctx, c.proxies, uf, fileMessages)
 		if e != nil {
 			return nil, e
 		}
 		userFiles = "userFiles"
-		files = fmt.Sprintf(`[{"user_filename":"messages.txt","filename":"%s","size":"%d"}]`, filename, size)
+		files = fmt.Sprintf(`[{"user_filename":"%s.txt","filename":"%s","size":"%d"}]`, uf, filename, size)
 	}
 
 	chatId := uuid.NewString()
@@ -320,7 +322,7 @@ func (c *Chat) delete(chatId string) {
 }
 
 // 附件上传
-func (c *Chat) upload(ctx context.Context, proxies string, content string) (string, error) {
+func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (string, error) {
 	response, err := emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(proxies).
@@ -357,7 +359,7 @@ func (c *Chat) upload(ctx context.Context, proxies string, content string) (stri
 	//}
 
 	w := multipart.NewWriter(&buffer)
-	fw, _ := w.CreateFormFile("file", "messages.txt")
+	fw, _ := w.CreateFormFile("file", filename+".txt")
 	_, err = io.Copy(fw, strings.NewReader(content))
 	if err != nil {
 		return "", err
@@ -577,4 +579,17 @@ func extCookies(cookies, model string) (jar http.CookieJar) {
 	//
 	jar.SetCookies(u, []*http.Cookie{{Name: "has_seen_agent_uploads_modal", Value: "true"}})
 	return
+}
+
+func hex(size int) string {
+	bin := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890+_-"
+	binL := len(bin)
+	var buf bytes.Buffer
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for x := 0; x < size; x++ {
+		ch := bin[r.Intn(binL-1)]
+		buf.WriteByte(ch)
+	}
+
+	return buf.String()
 }
