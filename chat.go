@@ -127,6 +127,7 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		Context(ctx).
 		Proxies(c.proxies).
 		CookieJar(jar).
+		Ja3("yes").
 		Query("q", url.QueryEscape(query)).
 		Query("page", "1").
 		Query("count", "10").
@@ -165,6 +166,7 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 	response, err := emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(c.proxies).
+		Ja3("yes").
 		GET("https://you.com/api/user/getYouProState").
 		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("User-Agent", c.userAgent).
@@ -205,6 +207,7 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error)
 	response, err := emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(c.proxies).
+		Ja3("yes").
 		GET("https://you.com/api/user_chat_modes").
 		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("User-Agent", c.userAgent).
@@ -240,6 +243,7 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error)
 		response, err = emit.ClientBuilder(c.session).
 			Context(ctx).
 			Proxies(c.proxies).
+			Ja3("yes").
 			DELETE("https://you.com/api/user_chat_modes").
 			Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 			Header("User-Agent", c.userAgent).
@@ -261,6 +265,7 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error)
 	response, err = emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(c.proxies).
+		Ja3("yes").
 		POST("https://you.com/api/user_chat_modes").
 		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("User-Agent", c.userAgent).
@@ -295,6 +300,7 @@ func (c *Chat) LimitWithE(limitWithE bool) {
 func (c *Chat) delete(chatId string) {
 	response, err := emit.ClientBuilder(c.session).
 		Proxies(c.proxies).
+		Ja3("yes").
 		DELETE("https://you.com/api/chat/deleteChat").
 		CookieJar(extCookies(emit.MergeCookies(c.cookie, c.clearance), c.model)).
 		Header("Accept", "application/json, text/plain, */*").
@@ -311,7 +317,7 @@ func (c *Chat) delete(chatId string) {
 		return
 	}
 	defer response.Body.Close()
-	logrus.Infof("deleted: %d", emit.TextResponse(response))
+	logrus.Infof("deleted: %s", emit.TextResponse(response))
 }
 
 // 附件上传
@@ -319,6 +325,7 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 	response, err := emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(proxies).
+		Ja3("yes").
 		GET("https://you.com/api/get_nonce").
 		CookieJar(jar).
 		Header("Accept", "application/json, text/plain, */*").
@@ -362,6 +369,7 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 		Context(ctx).
 		Proxies(proxies).
 		CookieJar(jar).
+		Ja3("yes").
 		POST("https://you.com/api/upload").
 		Header("X-Upload-Nonce", nonce).
 		Header("Content-Type", w.FormDataContentType()).
@@ -390,6 +398,7 @@ func (c *Chat) upload(ctx context.Context, proxies string, jar http.CookieJar, c
 			Context(ctx).
 			Proxies(proxies).
 			CookieJar(jar).
+			Ja3("yes").
 			POST("https://you.com/api/instrumentation").
 			JHeader().
 			Header("Origin", "https://you.com").
