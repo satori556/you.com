@@ -49,6 +49,10 @@ const (
 	CLAUDE_3_SONNET   = "claude_3_sonnet"
 	CLAUDE_3_5_SONNET = "claude_3_5_sonnet"
 	CLAUDE_3_OPUS     = "claude_3_opus"
+
+	GEMINI_1_0_PRO   = "gemini_pro"
+	GEMINI_1_5_PRO   = "gemini_1_5_pro"
+	GEMINI_1_5_FLASH = "gemini_1_5_flash"
 )
 
 func New(cookie, model, proxies string) Chat {
