@@ -3,6 +3,7 @@ package you
 import (
 	"context"
 	"github.com/bincooo/emit.io"
+	"github.com/bogdanfinn/tls-client/profiles"
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
@@ -80,7 +81,7 @@ func TestChat(t *testing.T) {
 	//query := "你是什么模型？"
 	query = " "
 
-	session, err := emit.NewJa3Session("http://127.0.0.1:7890", 120)
+	session, err := emit.NewJa3Session(emit.Echo{RandomTLSExtension: true, HelloID: profiles.Chrome_124}, "http://127.0.0.1:7890", 120)
 	if err != nil {
 		logrus.Fatal(err)
 	}
