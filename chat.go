@@ -122,6 +122,9 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		}
 		userFiles = "userFiles"
 		files = fmt.Sprintf(`[{"user_filename":"%s.txt","filename":"%s","size":"%d"}]`, uf, filename, size)
+		if query == "" {
+			query = "Please review the attached file: " + filename
+		}
 	}
 
 	chatId := uuid.NewString()
@@ -139,6 +142,7 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		Query("mkt", "zh-HK").
 		Query("domain", "youchat").
 		Query("use_personalization_extraction", "false").
+		Query("disable_web_results", "false").
 		Query("queryTraceId", chatId).
 		Query("chatId", chatId).
 		Query("conversationTurnId", conversationTurnId).
@@ -307,7 +311,7 @@ func (c *Chat) delete(chatId string) {
 		Proxies(c.proxies).
 		Ja3("yes").
 		DELETE("https://you.com/api/chat/deleteChat").
-		CookieJar(extCookies(emit.MergeCookies(c.cookie, c.clearance), c.model)).
+		Header("cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("Accept", "application/json, text/plain, */*").
 		Header("Accept-Language", c.lang).
 		Header("Referer", "https://you.com/?chatMode=custom").
@@ -586,7 +590,7 @@ func extCookies(cookies, model string) (jar http.CookieJar) {
 }
 
 func hex(size int) string {
-	bin := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890+_-"
+	bin := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890+_-="
 	binL := len(bin)
 	var buf bytes.Buffer
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
