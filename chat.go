@@ -40,9 +40,12 @@ type Chat struct {
 }
 
 const (
-	GPT_4       = "gpt_4"
-	GPT_4o      = "gpt_4o"
-	GPT_4_TURBO = "gpt_4_turbo"
+	GPT_4          = "gpt_4"
+	GPT_4o         = "gpt_4o"
+	GPT_4o_MINI    = "gpt_4o_mini"
+	GPT_4_TURBO    = "gpt_4_turbo"
+	OPENAI_O1      = "openai_o1"
+	OPENAI_O1_MINI = "openai_o1_mini"
 
 	CLAUDE_2          = "claude_2"
 	CLAUDE_3_HAIKU    = "claude_3_haiku"
