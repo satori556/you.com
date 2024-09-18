@@ -81,14 +81,17 @@ func TestChat(t *testing.T) {
 	//query := "你是什么模型？"
 	query = " "
 
-	session, err := emit.NewJa3Session(emit.Echo{RandomTLSExtension: true, HelloID: profiles.Chrome_124}, "http://127.0.0.1:7890", 120)
+	session, err := emit.NewSession("http://127.0.0.1:7890", nil, emit.Ja3Helper(emit.Echo{
+		RandomTLSExtension: true,
+		HelloID:            profiles.Chrome_124,
+	}, 120))
 	if err != nil {
 		logrus.Fatal(err)
 	}
 
 	if clearance == "" {
 		response, e := emit.ClientBuilder(session).
-			Ja3("yes").
+			Ja3().
 			GET("http://127.0.0.1:8080/clearance").
 			DoS(http.StatusOK)
 		if e != nil {

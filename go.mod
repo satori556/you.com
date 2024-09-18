@@ -3,7 +3,7 @@ module github.com/bincooo/you.com
 go 1.21.6
 
 require (
-	github.com/bincooo/emit.io v1.0.1-0.20240814182208-c5236f8f202c
+	github.com/bincooo/emit.io v1.0.1-0.20240918104917-7aa3711f2559
 	github.com/bogdanfinn/tls-client v1.7.7
 	github.com/gingfrederik/docx v0.0.1
 	github.com/google/uuid v1.6.0
