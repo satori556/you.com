@@ -28,10 +28,12 @@ type Message struct {
 }
 
 type Chat struct {
-	cookie     string
-	clearance  string
-	model      string
-	proxies    string
+	cookie,
+	clearance,
+	mode,
+	model,
+	proxies string
+
 	limitWithE bool
 
 	session   *emit.Session
@@ -61,7 +63,17 @@ const (
 func New(cookie, model, proxies string) Chat {
 	lang := "en-US,en;q=0.9"
 	userAgent := "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"
-	return Chat{cookie, "", model, proxies, false, nil, userAgent, lang}
+	return Chat{
+		cookie,
+		"",
+		"custom",
+		model,
+		proxies,
+		false,
+		nil,
+		userAgent,
+		lang,
+	}
 }
 
 func (c *Chat) Client(session *emit.Session) {
@@ -149,9 +161,9 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		Query("queryTraceId", chatId).
 		Query("chatId", chatId).
 		Query("conversationTurnId", conversationTurnId).
-		Query("selectedChatMode", "custom").
+		Query("selectedChatMode", c.mode).
 		Query(userFiles, url.QueryEscape(files)).
-		Query("selectedAiModel", c.model).
+		Query(or(c.model == "", "_", "selectedAiModel"), c.model).
 		Query("traceId", fmt.Sprintf("%s|%s|%s", chatId, conversationTurnId, t)).
 		Query("incognito", "true").
 		Query("responseFilter", "WebPages,TimeZone,Computation,RelatedSearches").
@@ -161,7 +173,7 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		Header("User-Agent", c.userAgent).
 		Header("Host", "you.com").
 		Header("Origin", "https://you.com").
-		Header("Referer", "https://you.com/search?fromSearchBar=true&tbm=youchat&chatMode=custom").
+		Header("Referer", "https://you.com/search?fromSearchBar=true&tbm=youchat&chatMode="+c.mode).
 		Header("Accept-Language", c.lang).
 		Header("Accept", "text/event-stream").
 		DoS(http.StatusOK)
@@ -204,7 +216,7 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 	if len(s.Subscriptions) > 0 {
 		iter := s.Subscriptions[0]
 		value := iter.(map[string]interface{})
-		if service, ok := value["service"]; ok && service.(string) == "youpro" {
+		if service, ok := value["service"]; ok && service == "youpro" {
 			logrus.Info("used: you pro") // 无限额度
 			return 200, nil
 		}
@@ -215,12 +227,13 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 }
 
 // 创建一个自定义模型，已存在则删除后创建
-func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error) {
+func (c *Chat) Custom(ctx context.Context, modelName, system string, isNew bool) (err error) {
 	response, err := emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(c.proxies).
 		Ja3().
-		GET("https://you.com/api/user_chat_modes").
+		GET("https://you.com/api/custom_assistants/assistants").
+		// Query("filter_type", "all").
 		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("User-Agent", c.userAgent).
 		Header("Accept-Language", c.lang).
@@ -250,13 +263,20 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error)
 		}
 	}
 
-	if modelId != "" { // 删除自定义模型
+	if modelId != "" {
+		if !isNew {
+			c.model = ""
+			c.mode = modelId
+			return
+		}
+
+		// 删除自定义模型
 		logrus.Infof("delete model: %s", modelName)
 		response, err = emit.ClientBuilder(c.session).
 			Context(ctx).
 			Proxies(c.proxies).
 			Ja3().
-			DELETE("https://you.com/api/user_chat_modes").
+			DELETE("https://you.com/api/custom_assistants/assistants").
 			Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 			Header("User-Agent", c.userAgent).
 			Header("Accept-Language", c.lang).
@@ -274,11 +294,12 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error)
 		_ = response.Body.Close()
 	}
 
+	// 新建自定义模型
 	response, err = emit.ClientBuilder(c.session).
 		Context(ctx).
 		Proxies(c.proxies).
 		Ja3().
-		POST("https://you.com/api/user_chat_modes").
+		POST("https://you.com/api/custom_assistants/assistants").
 		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("User-Agent", c.userAgent).
 		Header("Accept-Language", c.lang).
@@ -286,21 +307,33 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string) (err error)
 		Header("Origin", "https://you.com").
 		JHeader().
 		Body(map[string]interface{}{
-			"aiModel":            c.model,
-			"chatModeName":       modelName,
-			"instructions":       system,
-			"hasLiveWebAccess":   false,
-			"hasPersonalization": false,
+			"aiModel":               c.model,
+			"name":                  modelName,
+			"instructions":          system,
+			"instructionsSummary":   "",
+			"isUserOwned":           true,
+			"visibility":            "private",
+			"hideInstructions":      false,
+			"hasLiveWebAccess":      false,
+			"hasPersonalization":    false,
+			"includeFollowUps":      false,
+			"advancedReasoningMode": "off",
+			"sources":               make([]string, 0),
+			"webAccessConfig":       make(map[string]interface{}),
 		}).
 		DoC(emit.Status(http.StatusOK), emit.IsJSON)
-	if err == nil {
-		c.model = modelName
+	if err != nil {
+		return err
 	}
 
-	if response != nil {
-		_ = response.Body.Close()
+	obj, err = emit.ToMap(response)
+	if err != nil {
+		return err
 	}
 
+	_ = response.Body.Close()
+	c.mode = obj["chat_mode_id"].(string)
+	c.model = ""
 	return
 }
 
@@ -317,7 +350,7 @@ func (c *Chat) delete(chatId string) {
 		Header("cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("Accept", "application/json, text/plain, */*").
 		Header("Accept-Language", c.lang).
-		Header("Referer", "https://you.com/?chatMode=custom").
+		Header("Referer", "https://you.com/?chatMode="+c.mode).
 		Header("Origin", "https://you.com").
 		Header("User-Agent", c.userAgent).
 		JHeader().
@@ -342,7 +375,7 @@ func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (s
 		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("Accept", "application/json, text/plain, */*").
 		Header("Accept-Language", c.lang).
-		Header("Referer", "https://you.com/?chatMode=custom").
+		Header("Referer", "https://you.com/?chatMode="+c.mode).
 		Header("Origin", "https://you.com").
 		Header("User-Agent", c.userAgent).
 		DoS(http.StatusOK)
@@ -353,21 +386,21 @@ func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (s
 	nonce := emit.TextResponse(response)
 	_ = response.Body.Close()
 
-	//doc := docx.NewFile()
-	//para := doc.AddParagraph()
-	//para.AddText(content)
+	// doc := docx.NewFile()
+	// para := doc.AddParagraph()
+	// para.AddText(content)
 
 	var buffer bytes.Buffer
 
-	//h := make(textproto.MIMEHeader)
-	//h.Set("Content-Disposition", `form-data; name="file"; filename="messages.docx"`)
-	//h.Set("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-	//h.Set("Content-Type", "text/plain")
-	//fw, _ := w.CreatePart(h)
-	//err = doc.Write(fw)
-	//if err != nil {
+	// h := make(textproto.MIMEHeader)
+	// h.Set("Content-Disposition", `form-data; name="file"; filename="messages.docx"`)
+	// h.Set("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+	// h.Set("Content-Type", "text/plain")
+	// fw, _ := w.CreatePart(h)
+	// err = doc.Write(fw)
+	// if err != nil {
 	//	return "", err
-	//}
+	// }
 
 	w := multipart.NewWriter(&buffer)
 	fw, _ := w.CreateFormFile("file", filename+".txt")
@@ -389,7 +422,7 @@ func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (s
 		Header("Accept-Language", c.lang).
 		Header("Host", "you.com").
 		Header("Accept-Encoding", "br").
-		Header("Referer", "https://you.com/?chatMode=custom").
+		Header("Referer", "https://you.com/?chatMode="+c.mode).
 		Header("Origin", "https://you.com").
 		Header("Accept", "multipart/form-data").
 		Header("User-Agent", c.userAgent).
@@ -417,7 +450,7 @@ func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (s
 			Header("Accept-Language", c.lang).
 			Header("Host", "you.com").
 			Header("Accept-Encoding", "br").
-			Header("Referer", "https://you.com/?chatMode=custom").
+			Header("Referer", "https://you.com/?chatMode="+c.mode).
 			Header("Origin", "https://you.com").
 			Header("Accept", "application/json, text/plain, */*").
 			Header("User-Agent", c.userAgent).
@@ -435,7 +468,7 @@ func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (s
 func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Response, chatId string) {
 	defer close(ch)
 	defer response.Body.Close()
-	defer c.delete(chatId)
+	// defer c.delete(chatId)
 
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Split(func(data []byte, eof bool) (advance int, token []byte, err error) {
@@ -590,6 +623,14 @@ func extCookies(cookies, model string) (jar http.CookieJar) {
 	//
 	jar.SetCookies(u, []*http.Cookie{{Name: "has_seen_agent_uploads_modal", Value: "true"}})
 	return
+}
+
+func or[T any](condition bool, v1, v2 T) T {
+	if condition {
+		return v1
+	} else {
+		return v2
+	}
 }
 
 func hex(size int) string {

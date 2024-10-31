@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	cookie    = "xxx"
+	cookie    = ""
 	model     = CLAUDE_3_OPUS
 	clearance = ""
 	userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"
@@ -78,7 +78,7 @@ func TestChat(t *testing.T) {
 	messages = append(messages, Message{
 		Answer: query,
 	})
-	//query := "你是什么模型？"
+	// query := "你是什么模型？"
 	query = " "
 
 	session, err := emit.NewSession("http://127.0.0.1:7890", nil, emit.Ja3Helper(emit.Echo{
@@ -92,7 +92,7 @@ func TestChat(t *testing.T) {
 	if clearance == "" {
 		response, e := emit.ClientBuilder(session).
 			Ja3().
-			GET("http://127.0.0.1:8080/clearance").
+			GET("http://127.0.0.1:8081/clearance").
 			DoS(http.StatusOK)
 		if e != nil {
 			t.Fatal(e)
@@ -122,12 +122,17 @@ func TestChat(t *testing.T) {
 
 	chat.Client(session)
 	chat.CloudFlare(clearance, userAgent, "")
-	//err = chat.Custom(context.Background(), "you/"+model, "xxx")
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
+	err = chat.Custom(context.Background(), "you/"+model, "xxx", false)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	ch, err := chat.Reply(context.Background(), messages, "[]", query)
+	fileMessages, err := MergeMessages(messages, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ch, err := chat.Reply(context.Background(), nil, fileMessages, " ")
 	if err != nil {
 		t.Fatal(err)
 	}
