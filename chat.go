@@ -468,7 +468,7 @@ func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (s
 func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Response, chatId string) {
 	defer close(ch)
 	defer response.Body.Close()
-	// defer c.delete(chatId)
+	defer c.delete(chatId)
 
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Split(func(data []byte, eof bool) (advance int, token []byte, err error) {
