@@ -204,8 +204,9 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 
 	defer response.Body.Close()
 	type state struct {
-		Freemium      map[string]int
-		Subscriptions []interface{}
+		Freemium          map[string]int
+		Subscriptions     []interface{}
+		Org_subscriptions []interface{}
 	}
 
 	var s state
@@ -218,6 +219,15 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 		value := iter.(map[string]interface{})
 		if service, ok := value["service"]; ok && service == "youpro" {
 			logrus.Info("used: you pro") // 无限额度
+			return 200, nil
+		}
+	}
+
+	if len(s.Org_subscriptions) > 0 {
+		iter := s.Org_subscriptions[0]
+		value := iter.(map[string]interface{})
+		if service, ok := value["service"]; ok && service == "youpro_teams" {
+			logrus.Info("used: you team") // 无限额度
 			return 200, nil
 		}
 	}
