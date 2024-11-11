@@ -129,7 +129,7 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		files     = ""
 	)
 
-	if size := len(fileMessages); size > 2 {
+	if size := len(fileMessages); size > 0 {
 		uf := hex(12)
 		filename, e := c.upload(ctx, c.proxies, uf, fileMessages)
 		if e != nil {
@@ -138,7 +138,9 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		userFiles = "userFiles"
 		files = fmt.Sprintf(`[{"user_filename":"%s.txt","filename":"%s","size":"%d"}]`, uf, filename, size)
 		if query == "" {
-			query = "Please review the attached file: " + filename
+			query = "Please review the attached file: " + uf
+		} else {
+			query = strings.Replace(query, "{{filename}}", uf, -1)
 		}
 	}
 
@@ -448,7 +450,7 @@ func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (s
 		return "", err
 	}
 
-	if filename, ok := obj["filename"]; ok {
+	if fn, ok := obj["filename"]; ok {
 		response, err = emit.ClientBuilder(c.session).
 			Context(ctx).
 			Proxies(proxies).
@@ -469,7 +471,7 @@ func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (s
 		if response != nil {
 			_ = response.Body.Close()
 		}
-		return filename, nil
+		return fn, nil
 	}
 
 	return "", errors.New("upload failed")
