@@ -294,7 +294,7 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string, isNew bool)
 			Header("Accept-Language", c.lang).
 			Header("Referer", "https://you.com/").
 			Header("Origin", "https://you.com").
-			JHeader().
+			JSONHeader().
 			Body(map[string]interface{}{
 				"chatModeId": modelId,
 			}).
@@ -317,7 +317,7 @@ func (c *Chat) Custom(ctx context.Context, modelName, system string, isNew bool)
 		Header("Accept-Language", c.lang).
 		Header("Referer", "https://you.com/").
 		Header("Origin", "https://you.com").
-		JHeader().
+		JSONHeader().
 		Body(map[string]interface{}{
 			"aiModel":               c.model,
 			"name":                  modelName,
@@ -365,7 +365,7 @@ func (c *Chat) delete(chatId string) {
 		Header("Referer", "https://you.com/?chatMode="+c.mode).
 		Header("Origin", "https://you.com").
 		Header("User-Agent", c.userAgent).
-		JHeader().
+		JSONHeader().
 		Body(map[string]interface{}{
 			"chatId": chatId,
 		}).DoC(emit.Status(http.StatusOK), emit.IsJSON)
@@ -456,7 +456,7 @@ func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (s
 			Proxies(proxies).
 			Ja3().
 			POST("https://you.com/api/instrumentation").
-			JHeader().
+			JSONHeader().
 			Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 			Header("Origin", "https://you.com").
 			Header("Accept-Language", c.lang).
