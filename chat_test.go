@@ -5,16 +5,13 @@ import (
 	"github.com/bincooo/emit.io"
 	"github.com/bogdanfinn/tls-client/profiles"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"os"
-	"regexp"
 	"strings"
 	"testing"
 )
 
 var (
 	cookie    = ""
-	model     = CLAUDE_3_OPUS
+	model     = CLAUDE_3_5_SONNET
 	clearance = ""
 	userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"
 )
@@ -24,8 +21,8 @@ func TestChat(t *testing.T) {
 	chat := New(cookie, model, "http://127.0.0.1:7890")
 	chat.LimitWithE(true)
 
-	Exec("8081", "http://127.0.0.1:7890", os.Stdout, os.Stdout)
-	defer Exit()
+	//Exec("8081", "http://127.0.0.1:7890", os.Stdout, os.Stdout)
+	//defer Exit()
 
 	messages := []Message{
 		{
@@ -78,8 +75,8 @@ func TestChat(t *testing.T) {
 	messages = append(messages, Message{
 		Answer: query,
 	})
-	// query := "你是什么模型？"
-	query = " "
+	query = "你是什么模型？"
+	//query = " "
 
 	session, err := emit.NewSession("http://127.0.0.1:7890", nil, emit.Ja3Helper(emit.Echo{
 		RandomTLSExtension: true,
@@ -89,50 +86,50 @@ func TestChat(t *testing.T) {
 		logrus.Fatal(err)
 	}
 
-	if clearance == "" {
-		response, e := emit.ClientBuilder(session).
-			Ja3().
-			GET("http://127.0.0.1:8081/clearance").
-			DoS(http.StatusOK)
-		if e != nil {
-			t.Fatal(e)
-		}
-
-		obj, e := emit.ToMap(response)
-		if e != nil {
-			t.Fatal(e)
-		}
-
-		data := obj["data"].(map[string]interface{})
-		clearance = data["cookie"].(string)
-		userAgent = data["userAgent"].(string)
-
-		fileBytes, e := os.ReadFile("chat_test.go")
-		if e != nil {
-			t.Fatal(e)
-		}
-		fileContent := string(fileBytes)
-
-		compile := regexp.MustCompile(`clearance = "([^"]?)"`)
-		fileContent = compile.ReplaceAllString(fileContent, `clearance = "`+clearance+`"`)
-		compile = regexp.MustCompile(`userAgent = "([^"]?)"`)
-		fileContent = compile.ReplaceAllString(fileContent, `userAgent = "`+userAgent+`"`)
-		_ = os.WriteFile("chat_test.go", []byte(fileContent), 0644)
-	}
+	//if clearance == "" {
+	//	response, e := emit.ClientBuilder(session).
+	//		Ja3().
+	//		GET("http://127.0.0.1:8081/clearance").
+	//		DoS(http.StatusOK)
+	//	if e != nil {
+	//		t.Fatal(e)
+	//	}
+	//
+	//	obj, e := emit.ToMap(response)
+	//	if e != nil {
+	//		t.Fatal(e)
+	//	}
+	//
+	//	data := obj["data"].(map[string]interface{})
+	//	clearance = data["cookie"].(string)
+	//	userAgent = data["userAgent"].(string)
+	//
+	//	fileBytes, e := os.ReadFile("chat_test.go")
+	//	if e != nil {
+	//		t.Fatal(e)
+	//	}
+	//	fileContent := string(fileBytes)
+	//
+	//	compile := regexp.MustCompile(`clearance = "([^"]?)"`)
+	//	fileContent = compile.ReplaceAllString(fileContent, `clearance = "`+clearance+`"`)
+	//	compile = regexp.MustCompile(`userAgent = "([^"]?)"`)
+	//	fileContent = compile.ReplaceAllString(fileContent, `userAgent = "`+userAgent+`"`)
+	//	_ = os.WriteFile("chat_test.go", []byte(fileContent), 0644)
+	//}
 
 	chat.Client(session)
 	chat.CloudFlare(clearance, userAgent, "")
-	err = chat.Custom(context.Background(), "you/"+model, "xxx", false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	//err = chat.Custom(context.Background(), "you/"+model, "xxx", false)
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
 
 	fileMessages, err := MergeMessages(messages, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ch, err := chat.Reply(context.Background(), nil, fileMessages, " ")
+	ch, err := chat.Reply(context.Background(), nil, fileMessages, query)
 	if err != nil {
 		t.Fatal(err)
 	}

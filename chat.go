@@ -89,26 +89,6 @@ func (c *Chat) CloudFlare(cookie, userAgent, lang string) {
 }
 
 func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query string) (chan string, error) {
-	if c.clearance == "" && cmdPort != "" {
-		response, err := emit.ClientBuilder(c.session).
-			Context(ctx).
-			GET("http://127.0.0.1:" + cmdPort + "/clearance").
-			DoS(http.StatusOK)
-		if err != nil {
-			return nil, err
-		}
-
-		obj, err := emit.ToMap(response)
-		_ = response.Body.Close()
-		if err != nil {
-			return nil, err
-		}
-
-		data := obj["data"].(map[string]interface{})
-		c.clearance = data["cookie"].(string)
-		c.userAgent = data["userAgent"].(string)
-	}
-
 	if c.limitWithE {
 		count, err := c.State(ctx)
 		if err != nil {
@@ -158,24 +138,27 @@ func (c *Chat) Reply(ctx context.Context, chats []Message, fileMessages, query s
 		Query("safeSearch", "Off").
 		Query("mkt", "zh-HK").
 		Query("domain", "youchat").
+		Query("enable_worklow_generation_ux", "false").
 		Query("use_personalization_extraction", "false").
-		Query("disable_web_results", "false").
-		Query("queryTraceId", chatId).
+		Query("enable_agent_clarification_questions", "false").
+		Query("use_nested_youchat_updates", "true").
+		//Query("disable_web_results", "false").
+		Query("queryTraceId", uuid.NewString()).
 		Query("chatId", chatId).
 		Query("conversationTurnId", conversationTurnId).
 		Query("selectedChatMode", c.mode).
 		Query(userFiles, url.QueryEscape(files)).
 		Query(or(c.model == "", "_", "selectedAiModel"), c.model).
 		Query("traceId", fmt.Sprintf("%s|%s|%s", chatId, conversationTurnId, t)).
-		Query("incognito", "true").
-		Query("responseFilter", "WebPages,TimeZone,Computation,RelatedSearches").
+		//Query("incognito", "true").
+		//Query("responseFilter", "WebPages,TimeZone,Computation,RelatedSearches").
 		Query("pastChatLength", strconv.Itoa(len(chats))).
 		Query("chat", url.QueryEscape(messages)).
 		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
 		Header("User-Agent", c.userAgent).
 		Header("Host", "you.com").
 		Header("Origin", "https://you.com").
-		Header("Referer", "https://you.com/search?fromSearchBar=true&tbm=youchat&chatMode="+c.mode).
+		Header("Referer", "https://you.com/search?fromSearchBar=true&tbm=youchat&chatMode="+c.mode+"&cid="+chatId).
 		Header("Accept-Language", c.lang).
 		Header("Accept", "text/event-stream").
 		DoS(http.StatusOK)
