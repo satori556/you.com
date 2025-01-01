@@ -8,6 +8,7 @@ require (
 	github.com/gingfrederik/docx v0.0.1
 	github.com/google/uuid v1.6.0
 	github.com/sirupsen/logrus v1.9.3
+	github.com/tidwall/gjson v1.18.0
 )
 
 require (
@@ -20,6 +21,8 @@ require (
 	github.com/quic-go/quic-go v0.42.0 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/tam7t/hpkp v0.0.0-20160821193359-2b70b4024ed5 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
 	golang.org/x/net v0.25.0 // indirect

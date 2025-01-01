@@ -11,12 +11,14 @@ import (
 	_ "github.com/gingfrederik/docx"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 	"io"
 	"math/rand"
 	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -196,7 +198,10 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 
 	var s state
 	if err = emit.ToObject(response, &s); err != nil {
-		return -1, err
+		err = c.state2(ctx, &s)
+		if err != nil {
+			return -1, err
+		}
 	}
 
 	if len(s.Subscriptions) > 0 {
@@ -219,6 +224,45 @@ func (c *Chat) State(ctx context.Context) (int, error) {
 
 	logrus.Infof("used: %d/%d", s.Freemium["used_calls"], s.Freemium["max_calls"])
 	return s.Freemium["max_calls"] - s.Freemium["used_calls"], nil
+}
+
+func (c *Chat) state2(ctx context.Context, s interface{}) error {
+	response, err := emit.ClientBuilder(c.session).
+		Context(ctx).
+		Proxies(c.proxies).
+		Ja3().
+		GET("https://you.com/").
+		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
+		Header("User-Agent", c.userAgent).
+		Header("Accept-Language", c.lang).
+		Header("Referer", "https://you.com/").
+		Header("Origin", "https://you.com").
+		DoC(emit.Status(http.StatusOK), emit.IsHTML)
+	if err != nil {
+		return err
+	}
+
+	value := emit.TextResponse(response)
+	reg, regErr := regexp.Compile(`<script id="__NEXT_DATA__" type="application/json">(\{"props":.+})</script>`)
+	if regErr != nil {
+		return errors.New("getYouProState1 failed")
+	}
+
+	sub := reg.FindStringSubmatch(value)
+	if len(sub) < 2 {
+		return errors.New("getYouProState2 failed")
+	}
+
+	result := gjson.Get(sub[1], "props.pageProps.youProState")
+	if !result.Exists() {
+		return errors.New("getYouProState3 failed")
+	}
+
+	regErr = json.Unmarshal([]byte(result.String()), s)
+	if regErr != nil {
+		return errors.New("getYouProState4 failed")
+	}
+	return nil
 }
 
 // 创建一个自定义模型，已存在则删除后创建
