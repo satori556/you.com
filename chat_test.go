@@ -16,33 +16,6 @@ var (
 	userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0"
 )
 
-func TestState(t *testing.T) {
-	chat := New(cookie, model, "")
-	chat.LimitWithE(true)
-
-	type state struct {
-		Freemium          map[string]int
-		Subscriptions     []interface{}
-		Org_subscriptions []interface{}
-	}
-
-	session, err := emit.NewSession("http://127.0.0.1:7890", nil, emit.Ja3Helper(emit.Echo{
-		RandomTLSExtension: true,
-		HelloID:            profiles.Chrome_124,
-	}, 120))
-	if err != nil {
-		logrus.Fatal(err)
-	}
-
-	chat.Client(session)
-	var s state
-	err = chat.state2(context.Background(), &s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(s)
-}
-
 func TestChat(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 	chat := New(cookie, model, "http://127.0.0.1:7890")
