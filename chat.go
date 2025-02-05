@@ -427,37 +427,40 @@ func (c *Chat) upload(ctx context.Context, proxies, filename, content string) (s
 		return "", err
 	}
 
-	defer response.Body.Close()
-	var obj map[string]string
+	var obj = struct {
+		Filename     string      `json:"filename"`
+		UserFilename string      `json:"user_filename"`
+		SizeContext  interface{} `json:"size_context"`
+	}{}
+
 	if err = emit.ToObject(response, &obj); err != nil {
 		return "", err
 	}
+	_ = response.Body.Close()
 
-	if fn, ok := obj["filename"]; ok {
-		response, err = emit.ClientBuilder(c.session).
-			Context(ctx).
-			Proxies(proxies).
-			Ja3().
-			POST("https://you.com/api/instrumentation").
-			JSONHeader().
-			Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
-			Header("Origin", "https://you.com").
-			Header("Accept-Language", c.lang).
-			Header("Host", "you.com").
-			Header("Accept-Encoding", "br").
-			Header("Referer", "https://you.com/?chatMode="+c.mode).
-			Header("Origin", "https://you.com").
-			Header("Accept", "application/json, text/plain, */*").
-			Header("User-Agent", c.userAgent).
-			Bytes([]byte(`{"metricName":"file_upload_client_info_file_drop","documentVisibilityState":"visible","metricType":"info","value":1}`)).
-			DoS(http.StatusOK)
-		if response != nil {
-			_ = response.Body.Close()
-		}
-		return fn, nil
+	response, err = emit.ClientBuilder(c.session).
+		Context(ctx).
+		Proxies(proxies).
+		Ja3().
+		POST("https://you.com/api/instrumentation").
+		JSONHeader().
+		Header("Cookie", emit.MergeCookies(c.cookie, c.clearance)).
+		Header("Origin", "https://you.com").
+		Header("Accept-Language", c.lang).
+		Header("Host", "you.com").
+		Header("Accept-Encoding", "br").
+		Header("Referer", "https://you.com/?chatMode="+c.mode).
+		Header("Origin", "https://you.com").
+		Header("Accept", "application/json, text/plain, */*").
+		Header("User-Agent", c.userAgent).
+		Bytes([]byte(`{"metricName":"file_upload_client_info_file_drop","documentVisibilityState":"visible","metricType":"info","value":1}`)).
+		DoS(http.StatusOK)
+	if err != nil {
+		return "", err
 	}
 
-	return "", errors.New("upload failed")
+	_ = response.Body.Close()
+	return obj.Filename, nil
 }
 
 func (c *Chat) resolve(ctx context.Context, ch chan string, response *http.Response, chatId string) {
