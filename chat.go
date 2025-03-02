@@ -48,7 +48,6 @@ const (
 	GPT_4_TURBO    = "gpt_4_turbo"
 	OPENAI_O1      = "openai_o1"
 	OPENAI_O1_MINI = "openai_o1_mini"
-
 	CLAUDE_2          = "claude_2"
 	CLAUDE_3_HAIKU    = "claude_3_haiku"
 	CLAUDE_3_SONNET   = "claude_3_sonnet"
